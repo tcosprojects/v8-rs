@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["ErrorKind",""]],"struct":[["CapturedStackFrame",""],["CapturedStackTrace",""],["Error",""],["Message","An error message."],["StackFrame",""],["StackTrace",""]],"trait":[["ChainErr",""]],"type":[["Result",""]]});
