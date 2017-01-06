@@ -21,3 +21,4 @@ version = "0.14.0"
 [features]
 shared = ["v8-sys/shared"]
 unstable = []
+clang_3_9 = ["v8-sys/clang_3_9"]

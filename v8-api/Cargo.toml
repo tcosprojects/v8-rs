@@ -15,3 +15,6 @@ log = "0.3.6"
 [dependencies.clang]
 features = ["clang_3_5"]
 version = "0.13.0"
+
+[features]
+clang_3_9 = ["clang/clang_3_9"]

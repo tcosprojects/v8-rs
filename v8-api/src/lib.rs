@@ -171,6 +171,9 @@ const SPECIAL_CLASSES: &'static [&'static str] = &[
 const SPECIAL_METHODS: &'static [(&'static str, &'static str)] = &[
     ("Script", "Compile"), // Because ScriptOrigin param
     ("Message", "GetScriptOrigin"), // Because ScriptOrigin
+    ("String", "NewFromUtf8"), // Overloaded, custom glue
+    ("String", "NewFromOneByte"), // Unused, annoying-to-map signature
+    ("String", "NewFromTwoByte"), // Unused, annoying-to-map signature
     ("String", "WriteUtf8"), // Because annoying-to-map signature
     ("Object", "SetAlignedPointerInInternalFields"), // Because annoying-to-map signature
     ("Object", "CallAsFunction"), // Because annoying-to-map signature
@@ -494,6 +497,18 @@ fn build_type(typ: &clang::Type) -> Result<Type, ()> {
                 n => {
                     warn!("Unmapped type {:?} of kind {:?} (in lvalue reference exception table)",
                           n,
+                          typ.get_kind());
+                    Err(())
+                }
+            }
+        }
+        #[cfg(feature = "clang_3_9")]
+        clang::TypeKind::Elaborated => {
+            match typ.get_elaborated_type() {
+                Some(inner) => build_type(&inner),
+                None => {
+                    warn!("Unknown type {:?} of kind {:?} (an elaborated type)",
+                          typ.get_display_name(),
                           typ.get_kind());
                     Err(())
                 }

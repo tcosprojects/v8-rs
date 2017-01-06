@@ -26,3 +26,4 @@ lazy_static = "0.2.1"
 
 [features]
 shared = []
+clang_3_9 = ["v8-api/clang_3_9", "bindgen/clang_3_9"]
