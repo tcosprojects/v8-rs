@@ -1018,9 +1018,9 @@ void function_callback(const v8::FunctionCallbackInfo<v8::Value> &info) {
     v8::Local<v8::Object> outer_data =
         v8::Local<v8::Object>::Cast(info.Data());
 
-    FunctionCallback callback =
-        (FunctionCallback)
-        outer_data->GetAlignedPointerFromInternalField((int) FunctionHandlerFields::Callback);
+	v8::Local<v8::External> external_wrapped_callback = v8::Local<v8::External>::Cast(outer_data->GetInternalField((int)FunctionHandlerFields::Callback));
+	FunctionCallback callback = (FunctionCallback)external_wrapped_callback->Value();
+        
     v8::Local<v8::Value> data = outer_data->GetInternalField((int) FunctionHandlerFields::Data);
     FunctionCallbackInfo callback_info = build_callback_info(info, data);
 
@@ -1054,7 +1054,8 @@ FunctionRef v8_Function_New(
     v8::FunctionCallback callback;
 
     if (wrapped_callback) {
-        outer_data->SetAlignedPointerInInternalField((int) FunctionHandlerFields::Callback, (void *) wrapped_callback);
+        v8::Local<v8::External> external_wrapped_callback = v8::External::New(c.isolate, (void *)wrapped_callback);
+        outer_data->SetInternalField((int) FunctionHandlerFields::Callback, external_wrapped_callback);
         callback = function_callback;
     } else {
         callback = nullptr;
@@ -1159,7 +1160,8 @@ FunctionTemplateRef v8_FunctionTemplate_New(
     v8::FunctionCallback callback;
 
     if (wrapped_callback) {
-        outer_data->SetAlignedPointerInInternalField((int) FunctionHandlerFields::Callback, (void *) wrapped_callback);
+		v8::Local<v8::External> external_wrapped_callback = v8::External::New(c.isolate, (void *)wrapped_callback);
+        outer_data->SetInternalField((int) FunctionHandlerFields::Callback, external_wrapped_callback);
         callback = function_callback;
     }
 
