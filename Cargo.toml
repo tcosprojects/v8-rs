@@ -1,23 +1,26 @@
 [package]
+edition = "2018"
+name = "v8"
+version = "0.10.0"
 authors = ["David Flemström <david.flemstrom@gmail.com>"]
 description = "High-level bindings to V8, the Javascript engine"
-documentation = "https://dflemstr.github.io/v8-rs/v8/index.html"
 homepage = "https://dflemstr.github.io/v8-rs"
+documentation = "https://dflemstr.github.io/v8-rs/v8/index.html"
 keywords = ["v8", "javascript", "js", "ecmascript", "google"]
 license = "Apache-2.0"
-name = "v8"
 repository = "https://github.com/dflemstr/v8-rs"
-version = "0.9.6"
+[dependencies.failure]
+version = "0.1.5"
 
-[dependencies]
-error-chain = "0.9.0"
-lazy_static = "0.2.1"
-num_cpus = "1.1.0"
+[dependencies.lazy_static]
+version = "1.2.0"
+
+[dependencies.num_cpus]
+version = "1.9.0"
 
 [dependencies.v8-sys]
 path = "v8-sys"
-version = "0.14.0"
+version = "0.15.0"
 
 [features]
 shared = ["v8-sys/shared"]
-unstable = []

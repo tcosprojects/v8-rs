@@ -1,35 +1,38 @@
 [package]
+edition = "2018"
+name = "v8-sys"
+version = "0.15.0"
 authors = ["David Flemström <david.flemstrom@gmail.com>"]
 build = "build.rs"
-description = "Low-level bindings to V8, the Javascript engine"
-documentation = "https://dflemstr.github.io/v8-rs/v8_sys/index.html"
-homepage = "https://dflemstr.github.io/v8-rs"
 include = ["build.rs", "src/**/*", "Cargo.toml"]
+description = "Low-level bindings to V8, the Javascript engine"
+homepage = "https://dflemstr.github.io/v8-rs"
+documentation = "https://dflemstr.github.io/v8-rs/v8_sys/index.html"
 keywords = ["v8", "javascript", "js", "ecmascript", "google"]
 license = "Apache-2.0"
-name = "v8-sys"
 repository = "https://github.com/dflemstr/v8-rs/tree/master/v8-sys"
-version = "0.14.7"
+[dev-dependencies.lazy_static]
+version = "1.2.0"
+[build-dependencies.bindgen]
+version = "0.47.1"
 
-[build-dependencies]
-bindgen = "0.22.0"
-gcc = "0.3.38"
-pkg-config = "0.3.8"
+[build-dependencies.cc]
+version = "1.0.28"
 
 [build-dependencies.clang]
-features = ["runtime"]
 version = "0.15.0"
+features = ["runtime"]
 
 [build-dependencies.clang-sys]
-features = ["runtime"]
 version = "0.14.0"
+features = ["runtime"]
+
+[build-dependencies.pkg-config]
+version = "0.3.14"
 
 [build-dependencies.v8-api]
 path = "../v8-api"
-version = "0.7.0"
-
-[dev-dependencies]
-lazy_static = "0.2.1"
+version = "0.8.0"
 
 [features]
 shared = []

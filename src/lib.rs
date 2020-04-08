@@ -48,14 +48,20 @@
 //!
 //! [1]: https://developers.google.com/v8/
 
-#![cfg_attr(all(feature="unstable", test), feature(test))]
+#![deny(clippy::all)]
+#![deny(
+    missing_debug_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_import_braces,
+    unused_qualifications
+)]
 
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 #[macro_use]
 extern crate lazy_static;
-extern crate num_cpus;
-extern crate v8_sys;
 
 mod allocator;
 mod platform;
@@ -69,10 +75,10 @@ pub mod script;
 pub mod template;
 pub mod value;
 
-pub use context::Context;
-pub use isolate::Isolate;
-pub use script::Script;
-pub use value::Value;
+pub use crate::context::Context;
+pub use crate::isolate::Isolate;
+pub use crate::script::Script;
+pub use crate::value::Value;
 
 #[cfg(test)]
 mod tests {
@@ -83,8 +89,10 @@ mod tests {
         let context = Context::new(&isolate);
         let name = value::String::from_str(&isolate, "test.js");
         let source = value::String::from_str(&isolate, source);
-        let script = try!(Script::compile_with_name(&isolate, &context, &name, &source));
-        let result = try!(script.run(&context));
+        let script = r#try!(Script::compile_with_name(
+            &isolate, &context, &name, &source
+        ));
+        let result = r#try!(script.run(&context));
         Ok((isolate, context, result))
     }
 
@@ -437,11 +445,10 @@ mod tests {
         let result = eval("(");
 
         let error = result.unwrap_err();
-        match error.kind() {
-            &error::ErrorKind::Javascript(ref msg, _) => {
-                assert_eq!("Uncaught SyntaxError: Unexpected end of input", msg);
+        match error {
+            error::Error::Javascript { ref message, .. } => {
+                assert_eq!("Uncaught SyntaxError: Unexpected end of input", message);
             }
-            x => panic!("Unexpected error kind: {:?}", x),
         }
     }
 
@@ -450,17 +457,17 @@ mod tests {
         let result = eval("throw 'x';");
 
         let error = result.unwrap_err();
-        match error.kind() {
-            &error::ErrorKind::Javascript(ref msg, _) => {
-                assert_eq!("Uncaught x", msg);
+        match error {
+            error::Error::Javascript { ref message, .. } => {
+                assert_eq!("Uncaught x", message);
             }
-            x => panic!("Unexpected error kind: {:?}", x),
         }
     }
 
     #[test]
     fn eval_exception_stack() {
-        let result = eval(r#"
+        let result = eval(
+            r#"
 (function() {
   function x() {
     y();
@@ -476,18 +483,23 @@ mod tests {
   }
   x();
 })();
-"#);
+"#,
+        );
 
         let error = result.unwrap_err();
-        match error.kind() {
-            &error::ErrorKind::Javascript(ref msg, ref stack_trace) => {
-                assert_eq!("Uncaught Error: x", msg);
-                assert_eq!("    at new w (test.js:13:11)\n    at z (test.js:10:5)\n    at eval \
-                            <anon>:1:1\n    at y (test.js:7:5)\n    at x (test.js:4:5)\n    at \
-                            test.js:15:3\n    at test.js:16:3\n",
-                           format!("{}", stack_trace));
+        match error {
+            error::Error::Javascript {
+                ref message,
+                ref stack_trace,
+            } => {
+                assert_eq!("Uncaught Error: x", message);
+                assert_eq!(
+                    "    at new w (test.js:13:11)\n    at z (test.js:10:5)\n    at eval \
+                     <anon>:1:1\n    at y (test.js:7:5)\n    at x (test.js:4:5)\n    at \
+                     test.js:15:3\n    at test.js:16:3\n",
+                    format!("{}", stack_trace)
+                );
             }
-            x => panic!("Unexpected error kind: {:?}", x),
         }
     }
 
@@ -496,10 +508,12 @@ mod tests {
         let isolate = Isolate::new();
         let context = Context::new(&isolate);
 
-        let function = value::Function::new(&isolate,
-                                            &context,
-                                            1,
-                                            Box::new(|mut info| Ok(info.args.remove(0))));
+        let function = value::Function::new(
+            &isolate,
+            &context,
+            1,
+            Box::new(|mut info| Ok(info.args.remove(0))),
+        );
         let param = value::Integer::new(&isolate, 42);
 
         let result = function.call(&context, &[&param]).unwrap();
@@ -513,20 +527,22 @@ mod tests {
 
         let fi = i.clone();
         let fc = c.clone();
-        let f = value::Function::new(&i,
-                                     &c,
-                                     2,
-                                     Box::new(move |info| {
-            assert_eq!(2, info.length);
-            let ref a = info.args[0];
-            assert!(a.is_int32());
-            let a = a.int32_value(&fc);
-            let ref b = info.args[1];
-            assert!(b.is_int32());
-            let b = b.int32_value(&fc);
+        let f = value::Function::new(
+            &i,
+            &c,
+            2,
+            Box::new(move |info| {
+                assert_eq!(2, info.length);
+                let ref a = info.args[0];
+                assert!(a.is_int32());
+                let a = a.int32_value(&fc);
+                let ref b = info.args[1];
+                assert!(b.is_int32());
+                let b = b.int32_value(&fc);
 
-            Ok(value::Integer::new(&fi, a + b).into())
-        }));
+                Ok(value::Integer::new(&fi, a + b).into())
+            }),
+        );
 
         let k = value::String::from_str(&i, "f");
         c.global().set(&c, &k, &f);
@@ -540,7 +556,7 @@ mod tests {
         assert_eq!(5, result.int32_value(&c));
     }
 
-    fn test_function(info: value::FunctionCallbackInfo) -> Result<value::Value, value::Value> {
+    fn test_function(info: value::FunctionCallbackInfo) -> Result<Value, Value> {
         let i = info.isolate;
         let c = i.current_context().unwrap();
 
@@ -654,10 +670,12 @@ mod tests {
             let context = Context::new(&isolate);
             let param = value::Integer::new(&isolate, 42);
 
-            let function = value::Function::new(&isolate,
-                                                &context,
-                                                1,
-                                                Box::new(|mut info| Ok(info.args.remove(0))));
+            let function = value::Function::new(
+                &isolate,
+                &context,
+                1,
+                Box::new(|mut info| Ok(info.args.remove(0))),
+            );
             (function, context, param)
         };
 
@@ -672,14 +690,16 @@ mod tests {
         let context = Context::new(&isolate);
 
         let closure_isolate = isolate.clone();
-        let f = value::Function::new(&isolate,
-                &context,
-                0,
-                Box::new(move |_| {
-                    let msg = value::String::from_str(&closure_isolate, "FooBar");
-                    let ex = value::Exception::error(&closure_isolate, &msg);
-                    Err(ex)
-                }));
+        let f = value::Function::new(
+            &isolate,
+            &context,
+            0,
+            Box::new(move |_| {
+                let msg = value::String::from_str(&closure_isolate, "FooBar");
+                let ex = value::Exception::error(&closure_isolate, &msg);
+                Err(ex)
+            }),
+        );
 
         let name = value::String::from_str(&isolate, "f");
         context.global().set(&context, &name, &f);
@@ -699,19 +719,25 @@ mod tests {
         let context = Context::new(&isolate);
 
         let f = {
-            let foo = Foo { msg: "Hello, World!".into() };
+            let foo = Foo {
+                msg: "Hello, World!".into(),
+            };
 
             let closure_isolate = isolate.clone();
-            value::Function::new(&isolate,
-                                 &context,
-                                 0,
-                                 Box::new(move |_| {
-                                     assert_eq!("Hello, World!", &foo.msg);
-                                     Ok(value::undefined(&closure_isolate).into())
-                                 }))
+            value::Function::new(
+                &isolate,
+                &context,
+                0,
+                Box::new(move |_| {
+                    assert_eq!("Hello, World!", &foo.msg);
+                    Ok(value::undefined(&closure_isolate).into())
+                }),
+            )
         };
 
-        let bar = Foo { msg: "Goodbye, World!".into() };
+        let bar = Foo {
+            msg: "Goodbye, World!".into(),
+        };
         let name = value::String::from_str(&isolate, "f");
         context.global().set(&context, &name, &f);
 
@@ -724,15 +750,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic="You dun goofed"]
+    #[should_panic]
     fn propagate_panic() {
         let isolate = Isolate::new();
         let context = Context::new(&isolate);
 
-        let f = value::Function::new(&isolate,
-                                     &context,
-                                     0,
-                                     Box::new(|_| panic!("You dun goofed")));
+        let f = value::Function::new(
+            &isolate,
+            &context,
+            0,
+            Box::new(|_| panic!("You dun goofed")),
+        );
 
         f.call(&context, &[]).unwrap();
     }
@@ -742,17 +770,21 @@ mod tests {
         let isolate = Isolate::new();
         let context = Context::new(&isolate);
 
-        let f = value::Function::new(&isolate,
-                                     &context,
-                                     0,
-                                     Box::new(|_| panic!("Something: {}", 42)));
+        let f = value::Function::new(
+            &isolate,
+            &context,
+            0,
+            Box::new(|_| panic!("Something: {}", 42)),
+        );
 
         let f_key = value::String::from_str(&isolate, "f");
         context.global().set(&context, &f_key, &f);
 
-        let source = value::String::from_str(&isolate,
-                                             "(function() { try { f(); } catch (e) { return \
-                                              e.message; } })()");
+        let source = value::String::from_str(
+            &isolate,
+            "(function() { try { f(); } catch (e) { return \
+             e.message; } })()",
+        );
         let script = Script::compile(&isolate, &context, &source).unwrap();
         let result = script.run(&context).unwrap();
 
@@ -762,7 +794,7 @@ mod tests {
     }
 }
 
-#[cfg(all(feature="unstable", test))]
+#[cfg(all(feature = "unstable", test))]
 mod benches {
     extern crate test;
 
@@ -788,10 +820,12 @@ mod benches {
         let isolate = Isolate::new();
         let context = Context::new(&isolate);
 
-        let function = value::Function::new(&isolate,
-                                            &context,
-                                            1,
-                                            Box::new(|mut info| Ok(info.args.remove(0))));
+        let function = value::Function::new(
+            &isolate,
+            &context,
+            1,
+            Box::new(|mut info| Ok(info.args.remove(0))),
+        );
         let param = value::Integer::new(&isolate, 42);
 
         bencher.iter(|| function.call(&context, &[&param]).unwrap());

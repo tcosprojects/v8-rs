@@ -1,13 +1,11 @@
-use v8_sys as v8;
+use crate::isolate;
+use num_cpus;
 use std::thread;
 use std::time;
-use num_cpus;
-use isolate;
+use v8_sys as v8;
 
 lazy_static! {
-    static ref START_TIME: time::Instant = {
-        time::Instant::now()
-    };
+    static ref START_TIME: time::Instant = { time::Instant::now() };
 }
 
 /// A simple platform implementation that uses global OS threads for
@@ -100,13 +98,13 @@ extern "C" fn number_of_available_background_threads() -> usize {
     num_cpus::get()
 }
 
-extern "C" fn call_on_background_thread(task: v8::TaskPtr,
-                                        _expected_runtime: v8::v8_ExpectedRuntime) {
+extern "C" fn call_on_background_thread(
+    task: v8::TaskPtr,
+    _expected_runtime: v8::v8_ExpectedRuntime,
+) {
     let task = Task(task);
-    thread::spawn(move || {
-        unsafe {
-            v8::v8_Task_Run(task.0);
-        }
+    thread::spawn(move || unsafe {
+        v8::v8_Task_Run(task.0);
     });
 }
 
@@ -117,9 +115,11 @@ extern "C" fn call_on_foreground_thread(isolate: v8::IsolatePtr, task: v8::TaskP
     isolate.enqueue_task(task);
 }
 
-extern "C" fn call_delayed_on_foreground_thread(isolate: v8::IsolatePtr,
-                                                task: v8::TaskPtr,
-                                                delay_in_seconds: f64) {
+extern "C" fn call_delayed_on_foreground_thread(
+    isolate: v8::IsolatePtr,
+    task: v8::TaskPtr,
+    delay_in_seconds: f64,
+) {
     let task = Task(task);
     let isolate = unsafe { isolate::Isolate::from_raw(isolate) };
     let duration = duration_from_seconds(delay_in_seconds);

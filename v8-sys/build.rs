@@ -1,9 +1,9 @@
-extern crate v8_api;
 extern crate bindgen;
+extern crate cc;
 extern crate clang;
 extern crate clang_sys;
-extern crate gcc;
 extern crate pkg_config;
+extern crate v8_api;
 
 use std::env;
 use std::fmt;
@@ -17,10 +17,13 @@ trait DisplayAsC {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result;
 }
 
-struct C<'a, A>(&'a A) where A: 'a;
+struct C<'a, A>(&'a A)
+where
+    A: 'a;
 
 impl<'a, A> fmt::Display for C<'a, A>
-    where A: DisplayAsC + 'a
+where
+    A: DisplayAsC + 'a,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         DisplayAsC::fmt(self.0, f)
@@ -87,8 +90,10 @@ fn link_v8() {
             }
             let lib_name = path.file_name().unwrap().to_str().unwrap();
             if lib_name.starts_with("lib") && lib_name.ends_with(".a") {
-                println!("cargo:rustc-link-lib=static={}",
-                         &lib_name[3..lib_name.len() - 2]);
+                println!(
+                    "cargo:rustc-link-lib=static={}",
+                    &lib_name[3..lib_name.len() - 2]
+                );
             }
         }
     } else if let Some(dir_str) = env::var_os("V8_BUILD") {
@@ -114,14 +119,14 @@ fn link_v8() {
     } else {
         let statik = !cfg!(feature = "shared");
         println!("preferring static linking: {}", statik);
-        let result = pkg_config::Config::new()
-            .statik(statik)
-            .probe("v8");
+        let result = pkg_config::Config::new().statik(statik).probe("v8");
         if result.is_ok() {
             println!("using pkg-config for library v8");
         } else {
-            println!("cargo:warning=pkg-config failed, falling back to naïve lib search: {:?}",
-                     result);
+            println!(
+                "cargo:warning=pkg-config failed, falling back to naïve lib search: {:?}",
+                result
+            );
 
             maybe_search("/usr/lib");
             maybe_search("/usr/local/lib");
@@ -155,19 +160,22 @@ fn blind_link_libraries() {
         println!("cargo:rustc-link-lib=static=icuuc");
         if fs::metadata("/usr/lib/x86_64-linux-gnu/libicudata.a")
             .map(|m| m.is_file())
-            .unwrap_or(false) {
+            .unwrap_or(false)
+        {
             println!("cargo:rustc-link-lib=static=icudata");
         }
         if fs::metadata("/usr/local/opt/icu4c/lib/libicudata.a")
             .map(|m| m.is_file())
-            .unwrap_or(false) {
+            .unwrap_or(false)
+        {
             println!("cargo:rustc-link-lib=static=icudata");
         }
     }
 }
 
 fn maybe_search<P>(dir: P)
-    where P: AsRef<path::Path>
+where
+    P: AsRef<path::Path>,
 {
     let dir = dir.as_ref();
     if fs::metadata(dir).map(|m| m.is_dir()).unwrap_or(false) {
@@ -178,12 +186,11 @@ fn maybe_search<P>(dir: P)
 fn gen_bindings(out_dir_path: &path::Path, bindings_path: &path::Path) {
     use std::io::Write;
     let mut bindings = bindgen::builder()
-    .header("src/v8-glue.h")
-    .emit_builtins()
-    .no_unstable_rust()
-    //bindings.remove_prefix("v8_");
-    .clang_arg("-Isrc")
-    .clang_arg(format!("-I{}", out_dir_path.to_string_lossy()));
+        .header("src/v8-glue.h")
+        .emit_builtins()
+        .blacklist_type("max_align_t")
+        .clang_arg("-Isrc")
+        .clang_arg(format!("-I{}", out_dir_path.to_string_lossy()));
 
     if let Some(dir_str) = env::var_os("V8_SOURCE") {
         println!("V8_SOURCE={:?}", dir_str);
@@ -197,12 +204,14 @@ fn gen_bindings(out_dir_path: &path::Path, bindings_path: &path::Path) {
 
     let mut bindings_file = fs::File::create(bindings_path).unwrap();
     writeln!(bindings_file, "mod ffi {{").unwrap();
-    generated_bindings.write(Box::new(&mut bindings_file)).unwrap();
+    generated_bindings
+        .write(Box::new(&mut bindings_file))
+        .unwrap();
     writeln!(bindings_file, "}}").unwrap();
 }
 
 fn build_glue(out_dir_path: &path::Path) {
-    let mut config = gcc::Config::new();
+    let mut config = cc::Build::new();
 
     if let Some(dir_str) = env::var_os("V8_SOURCE") {
         let dir = path::Path::new(&dir_str);
@@ -233,168 +242,203 @@ fn build_glue(out_dir_path: &path::Path) {
 }
 
 fn write_decl_header<W>(api: &v8_api::Api, mut out: W) -> io::Result<()>
-    where W: io::Write
+where
+    W: io::Write,
 {
-    try!(writeln!(out, "#pragma once"));
+    writeln!(out, "#pragma once")?;
 
     for class in api.classes.iter() {
-        try!(writeln!(out, ""));
-        try!(writeln!(out, "#if defined __cplusplus"));
-        try!(writeln!(out, "typedef v8::{class} *{class}Ptr;", class = class.name));
-        try!(writeln!(out,
-                      "typedef v8::Persistent<v8::{class}> *{class}Ref;",
-                      class = class.name));
-        try!(writeln!(out, "#else"));
-        try!(writeln!(out,
-                      "typedef struct _{class} *{class}Ptr;",
-                      class = class.name));
-        try!(writeln!(out,
-                      "typedef struct _{class}Ref *{class}Ref;",
-                      class = class.name));
-        try!(writeln!(out, "#endif /* defined __cplusplus */"));
+        writeln!(out, "")?;
+        writeln!(out, "#if defined __cplusplus")?;
+        writeln!(out, "typedef v8::{class} *{class}Ptr;", class = class.name)?;
+        writeln!(
+            out,
+            "typedef v8::Persistent<v8::{class}> *{class}Ref;",
+            class = class.name
+        )?;
+        writeln!(out, "#else")?;
+        writeln!(
+            out,
+            "typedef struct _{class} *{class}Ptr;",
+            class = class.name
+        )?;
+        writeln!(
+            out,
+            "typedef struct _{class}Ref *{class}Ref;",
+            class = class.name
+        )?;
+        writeln!(out, "#endif /* defined __cplusplus */")?;
     }
 
     Ok(())
 }
 
 fn write_header<W>(api: &v8_api::Api, mut out: W) -> io::Result<()>
-    where W: io::Write
+where
+    W: io::Write,
 {
-    try!(writeln!(out, "#pragma once"));
+    writeln!(out, "#pragma once")?;
 
     for class in api.classes.iter() {
-        try!(writeln!(out, ""));
+        writeln!(out, "")?;
 
         for method in class.methods.iter() {
-            try!(write!(out,
-                        "{retty} v8_{class}_{method}(RustContext c",
-                        retty = C(&method.ret_type),
-                        class = class.name,
-                        method = method.mangled_name));
+            write!(
+                out,
+                "{retty} v8_{class}_{method}(RustContext c",
+                retty = C(&method.ret_type),
+                class = class.name,
+                method = method.mangled_name
+            )?;
 
             if !method.is_static {
-                try!(write!(out, ", {class}Ref self", class = class.name));
+                write!(out, ", {class}Ref self", class = class.name)?;
             }
 
             for arg in method.args.iter() {
-                try!(write!(out, ", {arg}", arg = C(arg)));
+                write!(out, ", {arg}", arg = C(arg))?;
             }
-            try!(writeln!(out, ");"));
+            writeln!(out, ");")?;
         }
 
-        try!(writeln!(out,
-                      "{class}Ref v8_{class}_CloneRef(RustContext c, {class}Ref self);",
-                      class = class.name));
+        writeln!(
+            out,
+            "{class}Ref v8_{class}_CloneRef(RustContext c, {class}Ref self);",
+            class = class.name
+        )?;
 
-        try!(writeln!(out,
-                      "void v8_{class}_DestroyRef({class}Ref self);",
-                      class = class.name));
+        writeln!(
+            out,
+            "void v8_{class}_DestroyRef({class}Ref self);",
+            class = class.name
+        )?;
 
-        try!(writeln!(out,
-                      "void v8_{class}_DestroyPtr({class}Ptr self);",
-                      class = class.name));
+        writeln!(
+            out,
+            "void v8_{class}_DestroyPtr({class}Ptr self);",
+            class = class.name
+        )?;
     }
 
     Ok(())
 }
 
 fn write_cc_file<W>(api: &v8_api::Api, mut out: W) -> io::Result<()>
-    where W: io::Write
+where
+    W: io::Write,
 {
     for class in api.classes.iter() {
         for method in class.methods.iter() {
-            try!(writeln!(out, ""));
-            try!(write!(out,
-                        "{retty} v8_{class}_{method}(RustContext c",
-                        retty = C(&method.ret_type),
-                        class = class.name,
-                        method = method.mangled_name));
+            writeln!(out, "")?;
+            write!(
+                out,
+                "{retty} v8_{class}_{method}(RustContext c",
+                retty = C(&method.ret_type),
+                class = class.name,
+                method = method.mangled_name
+            )?;
 
             if !method.is_static {
-                try!(write!(out, ", {class}Ref self", class = class.name));
+                write!(out, ", {class}Ref self", class = class.name)?;
             }
 
             for arg in method.args.iter() {
-                try!(write!(out, ", {arg}", arg = C(arg)));
+                write!(out, ", {arg}", arg = C(arg))?;
             }
-            try!(writeln!(out, ") {{"));
+            writeln!(out, ") {{")?;
 
-            try!(writeln!(out, "  v8::Isolate::Scope __isolate_scope(c.isolate);"));
-            try!(writeln!(out, "  v8::HandleScope __handle_scope(c.isolate);"));
-            try!(writeln!(out, "  v8::TryCatch __try_catch(c.isolate);"));
+            writeln!(out, "  v8::Isolate::Scope __isolate_scope(c.isolate);")?;
+            writeln!(out, "  v8::HandleScope __handle_scope(c.isolate);")?;
+            writeln!(out, "  v8::TryCatch __try_catch(c.isolate);")?;
 
-            let context_type = v8_api::Type::Ref(Box::new(v8_api::Type::Class("Context"
-                .to_owned())));
+            let context_type =
+                v8_api::Type::Ref(Box::new(v8_api::Type::Class("Context".to_owned())));
             if let Some(arg) = method.args.iter().find(|ref a| a.arg_type == context_type) {
                 // There should only be one context but who knows
-                try!(writeln!(out,
-                              "  auto wrapped_{ctx} = wrap(c.isolate, {ctx});",
-                              ctx = arg.name));
-                try!(writeln!(out,
-                              "  v8::Context::Scope {ctx}_scope(wrapped_{ctx});",
-                              ctx = arg.name));
+                writeln!(
+                    out,
+                    "  auto wrapped_{ctx} = wrap(c.isolate, {ctx});",
+                    ctx = arg.name
+                )?;
+                writeln!(
+                    out,
+                    "  v8::Context::Scope {ctx}_scope(wrapped_{ctx});",
+                    ctx = arg.name
+                )?;
             }
 
             for arg in method.args.iter() {
-                try!(writeln!(out,
-                              "  auto {arg}_wrapped = wrap(c.isolate, {arg});",
-                              arg = arg.name));
+                writeln!(
+                    out,
+                    "  auto {arg}_wrapped = wrap(c.isolate, {arg});",
+                    arg = arg.name
+                )?;
             }
 
             if let v8_api::RetType::Direct(v8_api::Type::Void) = method.ret_type {
-                try!(write!(out, "  "));
+                write!(out, "  ")?;
             } else {
-                try!(write!(out, "  auto result = "));
+                write!(out, "  auto result = ")?;
             }
             if method.is_static {
-                try!(write!(out,
-                            "v8::{class}::{method}(",
-                            class = class.name,
-                            method = method.name));
+                write!(
+                    out,
+                    "v8::{class}::{method}(",
+                    class = class.name,
+                    method = method.name
+                )?;
             } else {
-                try!(write!(out, "self->Get(c.isolate)->{method}(", method = method.name));
+                write!(out, "self->Get(c.isolate)->{method}(", method = method.name)?;
             }
 
             let mut needs_sep = false;
             for arg in method.args.iter() {
                 if needs_sep {
-                    try!(write!(out, ", "));
+                    write!(out, ", ")?;
                 }
                 needs_sep = true;
-                try!(write!(out, "{arg}_wrapped", arg = arg.name));
+                write!(out, "{arg}_wrapped", arg = arg.name)?;
             }
-            try!(writeln!(out, ");"));
+            writeln!(out, ");")?;
             if let v8_api::RetType::Direct(v8_api::Type::Void) = method.ret_type {
-                try!(writeln!(out, "  handle_exception(c, __try_catch);"));
+                writeln!(out, "  handle_exception(c, __try_catch);")?;
             } else {
-                try!(writeln!(out, "  handle_exception(c, __try_catch);"));
-                try!(writeln!(out,
-                              "  return {unwrapper}(c.isolate, result);",
-                              unwrapper = unwrapper(&method.ret_type)));
+                writeln!(out, "  handle_exception(c, __try_catch);")?;
+                writeln!(
+                    out,
+                    "  return {unwrapper}(c.isolate, result);",
+                    unwrapper = unwrapper(&method.ret_type)
+                )?;
             }
-            try!(writeln!(out, "}}"));
+            writeln!(out, "}}")?;
         }
 
-        try!(writeln!(out, ""));
-        try!(writeln!(out,
-                      "{class}Ref v8_{class}_CloneRef(RustContext c, {class}Ref self) {{",
-                      class = class.name));
-        try!(writeln!(out, "  v8::HandleScope __handle_scope(c.isolate);"));
-        try!(writeln!(out, "  return unwrap(c.isolate, wrap(c.isolate, self));"));
-        try!(writeln!(out, "}}"));
-        try!(writeln!(out, ""));
-        try!(writeln!(out,
-                      "void v8_{class}_DestroyRef({class}Ref self) {{",
-                      class = class.name));
-        try!(writeln!(out, "  self->Reset();"));
-        try!(writeln!(out, "  delete self;"));
-        try!(writeln!(out, "}}"));
-        try!(writeln!(out, ""));
-        try!(writeln!(out,
-                      "void v8_{class}_DestroyPtr({class}Ptr self) {{",
-                      class = class.name));
-        try!(writeln!(out, "  delete self;"));
-        try!(writeln!(out, "}}"));
+        writeln!(out, "")?;
+        writeln!(
+            out,
+            "{class}Ref v8_{class}_CloneRef(RustContext c, {class}Ref self) {{",
+            class = class.name
+        )?;
+        writeln!(out, "  v8::HandleScope __handle_scope(c.isolate);")?;
+        writeln!(out, "  return unwrap(c.isolate, wrap(c.isolate, self));")?;
+        writeln!(out, "}}")?;
+        writeln!(out, "")?;
+        writeln!(
+            out,
+            "void v8_{class}_DestroyRef({class}Ref self) {{",
+            class = class.name
+        )?;
+        writeln!(out, "  self->Reset();")?;
+        writeln!(out, "  delete self;")?;
+        writeln!(out, "}}")?;
+        writeln!(out, "")?;
+        writeln!(
+            out,
+            "void v8_{class}_DestroyPtr({class}Ptr self) {{",
+            class = class.name
+        )?;
+        writeln!(out, "  delete self;")?;
+        writeln!(out, "}}")?;
     }
 
     Ok(())
@@ -472,18 +516,14 @@ impl DisplayAsC for v8_api::Type {
             Type::Enum(ref name) => write!(f, "{}", name),
             Type::Callback(ref name) => write!(f, "{}", name),
             Type::CallbackLValue(ref name) => write!(f, "{}", name),
-            Type::Ref(ref target) => {
-                match **target {
-                    Type::Class(ref name) => write!(f, "{}Ref", name),
-                    ref t => write!(f, "&{}", C(t)),
-                }
-            }
-            Type::Ptr(ref target) => {
-                match **target {
-                    Type::Class(ref name) => write!(f, "{}Ptr", name),
-                    ref t => write!(f, "{} *", C(t)),
-                }
-            }
+            Type::Ref(ref target) => match **target {
+                Type::Class(ref name) => write!(f, "{}Ref", name),
+                ref t => write!(f, "&{}", C(t)),
+            },
+            Type::Ptr(ref target) => match **target {
+                Type::Class(ref name) => write!(f, "{}Ptr", name),
+                ref t => write!(f, "{} *", C(t)),
+            },
             Type::Arr(ref target) => write!(f, "{}[]", C(&**target)),
         }
     }

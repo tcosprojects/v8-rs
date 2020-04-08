@@ -25,6 +25,9 @@
 //! `Isolate::builder().supports_idle_tasks(true).build()`.  The user should then regularly call
 //! `isolate.run_idle_tasks(deadline)` to run any pending idle tasks.
 
+use crate::allocator;
+use crate::context;
+use crate::platform;
 use std::cmp;
 use std::collections;
 use std::mem;
@@ -32,9 +35,6 @@ use std::os;
 use std::sync;
 use std::time;
 use v8_sys as v8;
-use allocator;
-use context;
-use platform;
 
 static INITIALIZE: sync::Once = sync::ONCE_INIT;
 
@@ -48,6 +48,7 @@ static INITIALIZE: sync::Once = sync::ONCE_INIT;
 pub struct Isolate(v8::IsolatePtr);
 
 /// A builder for isolates.  Can be converted into an isolate with the `build` method.
+#[derive(Debug)]
 pub struct Builder {
     supports_idle_tasks: bool,
 }
@@ -73,7 +74,9 @@ impl Isolate {
 
     /// Creates a new isolate builder.
     pub fn builder() -> Builder {
-        Builder { supports_idle_tasks: false }
+        Builder {
+            supports_idle_tasks: false,
+        }
     }
 
     /// Creates a data from a set of raw pointers.
@@ -144,10 +147,12 @@ impl Isolate {
     pub fn run_idle_task(&self, deadline: time::Duration) -> bool {
         let data = unsafe { self.get_data() };
 
-        if let Some(idle_task) = data.idle_task_queue
+        if let Some(idle_task) = data
+            .idle_task_queue
             .as_mut()
             .map(|q| q.pop_front())
-            .unwrap_or(None) {
+            .unwrap_or(None)
+        {
             idle_task.run(deadline);
             true
         } else {
@@ -169,7 +174,11 @@ impl Isolate {
 
     /// Enqueues a task to be run when the isolate is considered to be "idle."
     pub fn enqueue_idle_task(&self, idle_task: platform::IdleTask) {
-        unsafe { self.get_data() }.idle_task_queue.as_mut().unwrap().push_back(idle_task);
+        unsafe { self.get_data() }
+            .idle_task_queue
+            .as_mut()
+            .unwrap()
+            .push_back(idle_task);
     }
 
     /// Whether this isolate was configured to support idle tasks.

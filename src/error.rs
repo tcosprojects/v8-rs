@@ -1,35 +1,50 @@
 //! Error types and utilities.
 
+use crate::context;
+use crate::isolate;
+use crate::util;
+use crate::value;
 use std::fmt;
+use std::result;
 use v8_sys as v8;
-use context;
-use isolate;
-use util;
-use value;
 
-error_chain! {
-    errors {
-        Javascript(message: String, stack_trace: CapturedStackTrace) {
-            description("Javascript exception")
-            display("Javascript exception: {}\n{}", message, stack_trace)
-        }
-    }
+/// A convenience `Result` type using `Error` as the error type.
+pub type Result<A> = result::Result<A, Error>;
+
+/// Any error that can occur when interacting with V8.
+#[derive(Debug, Fail)]
+pub enum Error {
+    /// A Javascript exception has occurred.
+    #[fail(display = "Javascript exception: {}\n{}", message, stack_trace)]
+    Javascript {
+        /// The message of the exception.
+        message: String,
+        /// The captured stack trace.
+        stack_trace: CapturedStackTrace,
+    },
 }
 
 /// A captured stack trace, that is separated from its underlying isolate.
 #[derive(Clone, Debug)]
 pub struct CapturedStackTrace {
+    /// The frames in this trace.
     pub frames: Vec<CapturedStackFrame>,
 }
 
 /// A captured stack frame, that is separated from its underlying isolate.
 #[derive(Clone, Debug)]
 pub struct CapturedStackFrame {
+    /// The frame's line number.
     pub line: u32,
+    /// The frame's column number.
     pub column: u32,
+    /// The name of the script, if known.
     pub script_name: Option<String>,
+    /// The name of the function, if known.
     pub function_name: Option<String>,
+    /// Whether this is an `eval()` call.
     pub is_eval: bool,
+    /// Whether this is a constructor call.
     pub is_constructor: bool,
 }
 
@@ -52,11 +67,10 @@ impl Message {
     pub fn get(&self, context: &context::Context) -> value::String {
         let _g = context.make_current();
         unsafe {
-            value::String::from_raw(&self.0,
-                                    util::invoke_ctx(&self.0,
-                                                     context,
-                                                     |c| v8::v8_Message_Get(c, self.1))
-                                        .unwrap())
+            value::String::from_raw(
+                &self.0,
+                util::invoke_ctx(&self.0, context, |c| v8::v8_Message_Get(c, self.1)).unwrap(),
+            )
         }
     }
 
@@ -68,6 +82,7 @@ impl Message {
         StackTrace(self.0.clone(), raw)
     }
 
+    /// Creates a message from a raw pointer.
     pub unsafe fn from_raw(isolate: &isolate::Isolate, raw: v8::MessageRef) -> Message {
         Message(isolate.clone(), raw)
     }
@@ -76,8 +91,9 @@ impl Message {
 impl StackTrace {
     /// The stack frames that this stack trace consists of.
     pub fn get_frames(&self) -> Vec<StackFrame> {
-        let count =
-            unsafe { util::invoke(&self.0, |c| v8::v8_StackTrace_GetFrameCount(c, self.1)).unwrap() };
+        let count = unsafe {
+            util::invoke(&self.0, |c| v8::v8_StackTrace_GetFrameCount(c, self.1)).unwrap()
+        };
         let mut result = Vec::with_capacity(count as usize);
 
         for i in 0..count {
@@ -95,7 +111,8 @@ impl StackTrace {
     /// isolate.
     pub fn to_captured(&self) -> CapturedStackTrace {
         CapturedStackTrace {
-            frames: self.get_frames()
+            frames: self
+                .get_frames()
                 .iter()
                 .map(StackFrame::to_captured)
                 .collect(),
@@ -119,7 +136,8 @@ impl StackFrame {
     /// The script file name in which this stack frame was pushed.
     pub fn get_script_name(&self) -> Option<value::String> {
         unsafe {
-            let raw = util::invoke(&self.0, |c| v8::v8_StackFrame_GetScriptName(c, self.1)).unwrap();
+            let raw =
+                util::invoke(&self.0, |c| v8::v8_StackFrame_GetScriptName(c, self.1)).unwrap();
             if raw.is_null() {
                 None
             } else {
@@ -131,7 +149,8 @@ impl StackFrame {
     /// The function name in which this stack frame was pushed.
     pub fn get_function_name(&self) -> value::String {
         unsafe {
-            let raw = util::invoke(&self.0, |c| v8::v8_StackFrame_GetFunctionName(c, self.1)).unwrap();
+            let raw =
+                util::invoke(&self.0, |c| v8::v8_StackFrame_GetFunctionName(c, self.1)).unwrap();
             value::String::from_raw(&self.0, raw)
         }
     }
@@ -168,7 +187,7 @@ impl StackFrame {
 impl fmt::Display for CapturedStackTrace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for frame in self.frames.iter() {
-            try!(writeln!(f, "{}", frame));
+            r#try!(writeln!(f, "{}", frame));
         }
         Ok(())
     }
@@ -176,33 +195,43 @@ impl fmt::Display for CapturedStackTrace {
 
 impl fmt::Display for CapturedStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "    at "));
+        r#try!(write!(f, "    at "));
 
         if self.is_constructor {
-            try!(write!(f, "new "));
+            r#try!(write!(f, "new "));
         }
 
         if let Some(ref function_name) = self.function_name {
-            try!(write!(f, "{} (", function_name));
+            r#try!(write!(f, "{} (", function_name));
 
             if self.is_eval {
-                try!(write!(f, "eval "));
+                r#try!(write!(f, "eval "));
             }
 
-            try!(write!(f,
-                        "{}:{}:{})",
-                        self.script_name.as_ref().map(|n| n.as_str()).unwrap_or("<anon>"),
-                        self.line,
-                        self.column));
+            r#try!(write!(
+                f,
+                "{}:{}:{})",
+                self.script_name
+                    .as_ref()
+                    .map(|n| n.as_str())
+                    .unwrap_or("<anon>"),
+                self.line,
+                self.column
+            ));
         } else {
             if self.is_eval {
-                try!(write!(f, "eval "));
+                r#try!(write!(f, "eval "));
             }
-            try!(write!(f,
-                        "{}:{}:{}",
-                        self.script_name.as_ref().map(|n| n.as_str()).unwrap_or("<anon>"),
-                        self.line,
-                        self.column));
+            r#try!(write!(
+                f,
+                "{}:{}:{}",
+                self.script_name
+                    .as_ref()
+                    .map(|n| n.as_str())
+                    .unwrap_or("<anon>"),
+                self.line,
+                self.column
+            ));
         }
 
         Ok(())
@@ -210,9 +239,13 @@ impl fmt::Display for CapturedStackFrame {
 }
 
 reference!(Message, v8::v8_Message_CloneRef, v8::v8_Message_DestroyRef);
-reference!(StackTrace,
-           v8::v8_StackTrace_CloneRef,
-           v8::v8_StackTrace_DestroyRef);
-reference!(StackFrame,
-           v8::v8_StackFrame_CloneRef,
-           v8::v8_StackFrame_DestroyRef);
+reference!(
+    StackTrace,
+    v8::v8_StackTrace_CloneRef,
+    v8::v8_StackTrace_DestroyRef
+);
+reference!(
+    StackFrame,
+    v8::v8_StackFrame_CloneRef,
+    v8::v8_StackFrame_DestroyRef
+);

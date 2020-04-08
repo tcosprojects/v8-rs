@@ -1,33 +1,38 @@
-use v8_sys as v8;
-use context;
-use error;
-use isolate;
+use crate::context;
+use crate::error;
+use crate::isolate;
+use crate::value;
 use std::any;
 use std::mem;
 use std::panic;
 use std::ptr;
-use value;
+use v8_sys as v8;
 
 pub fn invoke<F, B>(isolate: &isolate::Isolate, func: F) -> error::Result<B>
-    where F: FnOnce(v8::RustContext) -> B
+where
+    F: FnOnce(v8::RustContext) -> B,
 {
     invoke_inner(isolate, None, func)
 }
 
-pub fn invoke_ctx<F, B>(isolate: &isolate::Isolate,
-                        context: &context::Context,
-                        func: F)
-                        -> error::Result<B>
-    where F: FnOnce(v8::RustContext) -> B
+pub fn invoke_ctx<F, B>(
+    isolate: &isolate::Isolate,
+    context: &context::Context,
+    func: F,
+) -> error::Result<B>
+where
+    F: FnOnce(v8::RustContext) -> B,
 {
     invoke_inner(isolate, Some(context), func)
 }
 
-fn invoke_inner<F, B>(isolate: &isolate::Isolate,
-                      context: Option<&context::Context>,
-                      func: F)
-                      -> error::Result<B>
-    where F: FnOnce(v8::RustContext) -> B
+fn invoke_inner<F, B>(
+    isolate: &isolate::Isolate,
+    context: Option<&context::Context>,
+    func: F,
+) -> error::Result<B>
+where
+    F: FnOnce(v8::RustContext) -> B,
 {
     let mut exception = ptr::null_mut();
     let mut message = ptr::null_mut();
@@ -46,7 +51,8 @@ fn invoke_inner<F, B>(isolate: &isolate::Isolate,
         assert!(!message.is_null());
         let exception = unsafe { value::Value::from_raw(isolate, exception) };
         let message = unsafe { error::Message::from_raw(isolate, message) };
-        let context = context.map(|c| c.clone())
+        let context = context
+            .map(|c| c.clone())
             .or_else(|| isolate.current_context())
             .unwrap_or_else(|| context::Context::new(&isolate));
 
@@ -57,10 +63,10 @@ fn invoke_inner<F, B>(isolate: &isolate::Isolate,
             if exception.has(&context, &panic_info_key) {
                 match exception.get(&context, &panic_info_key).into_external() {
                     Some(panic_info) => {
-                        let panic_info =
-                            unsafe {
-                                Box::from_raw(panic_info.value() as *mut Box<any::Any + Send + 'static>)
-                            };
+                        let panic_info = unsafe {
+                            let value: *mut Box<any::Any + Send + 'static> = panic_info.value();
+                            Box::from_raw(value)
+                        };
                         panic::resume_unwind(panic_info);
                     }
                     None => {
@@ -70,9 +76,12 @@ fn invoke_inner<F, B>(isolate: &isolate::Isolate,
             }
         }
 
-        let message_str = message.get(&context).value();
         let stack_trace = message.get_stack_trace().to_captured();
-        Err(error::ErrorKind::Javascript(message_str, stack_trace).into())
+        let message = message.get(&context).value();
+        Err(error::Error::Javascript {
+            message,
+            stack_trace,
+        })
     }
 }
 
@@ -105,7 +114,8 @@ pub extern "C" fn callback(callback_info: v8::FunctionCallbackInfoPtr_Value) {
 
         match result {
             Ok(value) => {
-                let result = value.unwrap_or_else(|exception| throw_exception(&isolate, &exception));
+                let result =
+                    value.unwrap_or_else(|exception| throw_exception(&isolate, &exception));
                 callback_info.ReturnValue = result.as_raw();
                 mem::forget(result);
             }
@@ -120,15 +130,19 @@ pub extern "C" fn callback(callback_info: v8::FunctionCallbackInfoPtr_Value) {
 
 fn throw_exception(isolate: &isolate::Isolate, exception: &value::Value) -> value::Value {
     unsafe {
-        let raw = v8::v8_Isolate_ThrowException(isolate.as_raw(), exception.as_raw()).as_mut().unwrap();
-        ::value::Value::from_raw(isolate, raw)
+        let raw = v8::v8_Isolate_ThrowException(isolate.as_raw(), exception.as_raw())
+            .as_mut()
+            .unwrap();
+        crate::value::Value::from_raw(isolate, raw)
     }
 }
 
-fn create_panic_error(isolate: &isolate::Isolate,
-                      panic: Box<any::Any + Send + 'static>)
-                      -> value::Value {
-    let context = isolate.current_context()
+fn create_panic_error(
+    isolate: &isolate::Isolate,
+    panic: Box<any::Any + Send + 'static>,
+) -> value::Value {
+    let context = isolate
+        .current_context()
         .unwrap_or_else(|| context::Context::new(&isolate));
     let message = if let Some(s) = panic.downcast_ref::<String>() {
         value::String::from_str(&isolate, &format!("Rust panic: {}", s))
@@ -136,7 +150,9 @@ fn create_panic_error(isolate: &isolate::Isolate,
         value::String::from_str(&isolate, "Rust panic")
     };
 
-    let exception = value::Exception::error(&isolate, &message).into_object().unwrap();
+    let exception = value::Exception::error(&isolate, &message)
+        .into_object()
+        .unwrap();
 
     let panic_info_key = value::String::from_str(isolate, "panicInfo");
     let panic_info = unsafe { value::External::new(&isolate, Box::into_raw(Box::new(panic))) };
@@ -159,12 +175,10 @@ macro_rules! reference {
                 // SAFETY: This is unsafe because it calls a native method with a void pointer.
                 // It's safe because the macro is only used with a type and its corresponding
                 // destructor.
-                unsafe {
-                    $dtor(self.1)
-                }
+                unsafe { $dtor(self.1) }
             }
         }
-    }
+    };
 }
 
 macro_rules! subtype {
@@ -174,7 +188,7 @@ macro_rules! subtype {
                 unsafe { mem::transmute(child) }
             }
         }
-    }
+    };
 }
 
 macro_rules! inherit {
@@ -188,5 +202,5 @@ macro_rules! inherit {
                 unsafe { mem::transmute(self) }
             }
         }
-    }
+    };
 }

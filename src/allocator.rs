@@ -1,8 +1,8 @@
 //! Allocators for array buffers.
 use v8_sys as v8;
 
-use std::os;
 use std::mem;
+use std::os;
 
 /// A simple array buffer allocator that guarantees that all allocated
 /// blocks are coercible to `Vec`s.
@@ -59,7 +59,7 @@ extern "C" fn allocate_uninitialized(length: usize) -> *mut os::raw::c_void {
     let ptr = data.as_mut_ptr();
     mem::forget(data);
 
-    ptr as *mut os::raw::c_void
+    ptr
 }
 
 unsafe extern "C" fn free(data: *mut os::raw::c_void, length: usize) {

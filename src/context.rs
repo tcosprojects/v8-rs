@@ -1,8 +1,8 @@
 //! Execution contexts and sandboxing.
+use crate::isolate;
+use crate::util;
+use crate::value;
 use v8_sys as v8;
-use isolate;
-use util;
-use value;
 
 /// A sandboxed execution context with its own set of built-in objects and functions.
 #[derive(Debug)]
@@ -10,14 +10,17 @@ pub struct Context(isolate::Isolate, v8::ContextRef);
 
 /// A guard that keeps a context bound while it is in scope.
 #[must_use]
+#[derive(Debug)]
 pub struct ContextGuard<'a>(&'a Context);
 
 impl Context {
     /// Creates a new context and returns a handle to the newly allocated context.
     pub fn new(isolate: &isolate::Isolate) -> Context {
         unsafe {
-            Context(isolate.clone(),
-                    util::invoke(isolate, |c| v8::v8_Context_New(c)).unwrap())
+            Context(
+                isolate.clone(),
+                util::invoke(isolate, |c| v8::v8_Context_New(c)).unwrap(),
+            )
         }
     }
 
@@ -48,9 +51,10 @@ impl Context {
     ///
     pub fn global(&self) -> value::Object {
         unsafe {
-            value::Object::from_raw(&self.0,
-                                    util::invoke(&self.0, |c| v8::v8_Context_Global(c, self.1))
-                                        .unwrap())
+            value::Object::from_raw(
+                &self.0,
+                util::invoke(&self.0, |c| v8::v8_Context_Global(c, self.1)).unwrap(),
+            )
         }
     }
 

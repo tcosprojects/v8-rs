@@ -240,17 +240,20 @@ const METHOD_MANGLES: &'static [MethodMangle] = &[
 /// Since this library is supposed to be used in a build script,
 /// panics if anything goes wrong whatsoever.
 pub fn read<P1, P2>(file_path: P1, extra_includes: &[P2]) -> Api
-    where P1: AsRef<path::Path>,
-          P2: AsRef<path::Path>
+where
+    P1: AsRef<path::Path>,
+    P2: AsRef<path::Path>,
 {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, false, true);
 
-    let mut args = vec!["-x".to_owned(),
-                        "c++".to_owned(),
-                        "--std=c++11".to_owned(),
-                        "-DV8_DEPRECATION_WARNINGS".to_owned(),
-                        "-DV8_IMMINENT_DEPRECATION_WARNINGS".to_owned()];
+    let mut args = vec![
+        "-x".to_owned(),
+        "c++".to_owned(),
+        "--std=c++11".to_owned(),
+        "-DV8_DEPRECATION_WARNINGS".to_owned(),
+        "-DV8_IMMINENT_DEPRECATION_WARNINGS".to_owned(),
+    ];
 
     if cfg!(all(windows, target_env = "msvc")) {
         args.push("-fms-compatibility-version=19".to_owned());
@@ -268,7 +271,8 @@ pub fn read<P1, P2>(file_path: P1, extra_includes: &[P2]) -> Api
         }
     }
 
-    let translation_unit = index.parser(file_path.as_ref())
+    let translation_unit = index
+        .parser(file_path.as_ref())
         .arguments(&args)
         .parse()
         .unwrap();
@@ -277,15 +281,19 @@ pub fn read<P1, P2>(file_path: P1, extra_includes: &[P2]) -> Api
 }
 
 fn build_api(entity: &clang::Entity) -> Api {
-    let namespaces = entity.get_children()
+    let namespaces = entity
+        .get_children()
         .into_iter()
         .filter(|e| e.get_name().map(|n| n == "v8").unwrap_or(false));
-    let classes = namespaces.flat_map(|n| build_classes(&n).into_iter()).collect();
+    let classes = namespaces
+        .flat_map(|n| build_classes(&n).into_iter())
+        .collect();
     Api { classes: classes }
 }
 
 fn build_classes(entity: &clang::Entity) -> Vec<Class> {
-    entity.get_children()
+    entity
+        .get_children()
         .into_iter()
         // Is a class
         .filter(|e| e.get_kind() == clang::EntityKind::ClassDecl)
@@ -293,7 +301,9 @@ fn build_classes(entity: &clang::Entity) -> Vec<Class> {
         .filter(|e| !e.get_children().is_empty())
         // Is not nameless or special
         .filter(|e| {
-            e.get_name().map(|ref n| !SPECIAL_CLASSES.contains(&n.as_str())).unwrap_or(false)
+            e.get_name()
+                .map(|ref n| !SPECIAL_CLASSES.contains(&n.as_str()))
+                .unwrap_or(false)
         })
         .map(|e| build_class(&e))
         .collect::<Vec<_>>()
@@ -302,7 +312,8 @@ fn build_classes(entity: &clang::Entity) -> Vec<Class> {
 fn build_class(entity: &clang::Entity) -> Class {
     let name = entity.get_name().unwrap();
     Class {
-        methods: entity.get_children()
+        methods: entity
+            .get_children()
             .into_iter()
             // Is a method
             .filter(|e| e.get_kind() == clang::EntityKind::Method)
@@ -314,38 +325,44 @@ fn build_class(entity: &clang::Entity) -> Class {
             .filter(|e| {
                 e.get_name()
                     .map(|ref n| {
-                        !n.starts_with("operator") &&
-                            !SPECIAL_METHODS.iter()
-                            .any(|m| m.0 == name &&  m.1 == n)
+                        !n.starts_with("operator")
+                            && !SPECIAL_METHODS.iter().any(|m| m.0 == name && m.1 == n)
                     })
                     .unwrap_or(false)
             })
-            .flat_map(|e| build_method(&e)
-                      .map_err(|err| {
-                          warn!("Could not translate method {}", e.get_display_name().unwrap_or_else(||"(unnamed)".to_owned()));
-                          err
-                      }))
+            .flat_map(|e| {
+                build_method(&e).map_err(|err| {
+                    warn!(
+                        "Could not translate method {}",
+                        e.get_display_name()
+                            .unwrap_or_else(|| "(unnamed)".to_owned())
+                    );
+                    err
+                })
+            })
             .collect(),
         name: name,
     }
 }
 
 fn build_method(entity: &clang::Entity) -> Result<Method, ()> {
-    let display_name = try!(entity.get_display_name().ok_or(()));
-    let name = try!(entity.get_name().ok_or(()));
-    let args = try!(entity.get_arguments().ok_or(()));
-    let args: Vec<Arg> = try!(args.iter().map(|e| build_arg(&e)).collect());
+    let display_name = r#try!(entity.get_display_name().ok_or(()));
+    let name = r#try!(entity.get_name().ok_or(()));
+    let args = r#try!(entity.get_arguments().ok_or(()));
+    let args: Vec<Arg> = r#try!(args.iter().map(|e| build_arg(&e)).collect());
 
-    let method_type = try!(entity.get_type().ok_or(()));
+    let method_type = r#try!(entity.get_type().ok_or(()));
     let method_type_display_name = method_type.get_display_name();
-    let ret_type = try!(method_type.get_result_type().ok_or(()));
-    let ret_type = try!(build_ret_type(&ret_type));
+    let ret_type = r#try!(method_type.get_result_type().ok_or(()));
+    let ret_type = r#try!(build_ret_type(&ret_type));
 
-    let mangled_name = METHOD_MANGLES.iter()
+    let mangled_name = METHOD_MANGLES
+        .iter()
         .find(|m| {
-            m.name == name &&
-            (args.iter().any(|a| a.name == m.signature) || display_name.contains(m.signature) ||
-             method_type_display_name.contains(m.signature))
+            m.name == name
+                && (args.iter().any(|a| a.name == m.signature)
+                    || display_name.contains(m.signature)
+                    || method_type_display_name.contains(m.signature))
         })
         .map(|m| m.mangle.to_owned());
 
@@ -360,8 +377,8 @@ fn build_method(entity: &clang::Entity) -> Result<Method, ()> {
 
 fn build_arg(entity: &clang::Entity) -> Result<Arg, ()> {
     Ok(Arg {
-        name: try!(entity.get_name().ok_or(())),
-        arg_type: try!(build_type(&entity.get_type().unwrap())),
+        name: r#try!(entity.get_name().ok_or(())),
+        arg_type: r#try!(build_type(&entity.get_type().unwrap())),
     })
 }
 
@@ -370,16 +387,16 @@ fn build_ret_type(typ: &clang::Type) -> Result<RetType, ()> {
         let name = typ.get_display_name();
 
         if name.starts_with("MaybeLocal<") {
-            let ref_type = try!(build_type(&get_first_tpl_arg(typ)));
+            let ref_type = r#try!(build_type(&get_first_tpl_arg(typ)));
             Ok(RetType::Maybe(Type::Ref(Box::new(ref_type))))
         } else if name.starts_with("Maybe<") {
-            let ref_type = try!(build_type(&get_first_tpl_arg(typ)));
+            let ref_type = r#try!(build_type(&get_first_tpl_arg(typ)));
             Ok(RetType::Maybe(ref_type))
         } else {
-            Ok(RetType::Direct(try!(build_type(typ))))
+            Ok(RetType::Direct(r#try!(build_type(typ))))
         }
     } else {
-        Ok(RetType::Direct(try!(build_type(typ))))
+        Ok(RetType::Direct(r#try!(build_type(typ))))
     }
 }
 
@@ -393,14 +410,14 @@ fn build_type(typ: &clang::Type) -> Result<Type, ()> {
             } else {
                 Ok(Type::Char)
             }
-        },
+        }
         clang::TypeKind::CharU => {
             if typ.is_const_qualified() {
                 Ok(Type::ConstUChar)
             } else {
                 Ok(Type::UChar)
             }
-        },
+        }
         clang::TypeKind::UInt => Ok(Type::UInt),
         clang::TypeKind::Int => Ok(Type::Int),
         clang::TypeKind::ULong => Ok(Type::ULong),
@@ -409,13 +426,13 @@ fn build_type(typ: &clang::Type) -> Result<Type, ()> {
         clang::TypeKind::LongLong => Ok(Type::I64),
         clang::TypeKind::ULongLong => Ok(Type::U64),
         clang::TypeKind::Pointer => {
-            let inner = try!(typ.get_pointee_type().ok_or(()));
-            let inner = try!(build_type(&inner));
+            let inner = r#try!(typ.get_pointee_type().ok_or(()));
+            let inner = r#try!(build_type(&inner));
             Ok(Type::Ptr(Box::new(inner)))
         }
         clang::TypeKind::IncompleteArray => {
-            let inner = try!(typ.get_element_type().ok_or(()));
-            let inner = try!(build_type(&inner));
+            let inner = r#try!(typ.get_element_type().ok_or(()));
+            let inner = r#try!(build_type(&inner));
             Ok(Type::Arr(Box::new(inner)))
         }
         clang::TypeKind::Record => {
@@ -460,7 +477,7 @@ fn build_type(typ: &clang::Type) -> Result<Type, ()> {
         }
         clang::TypeKind::Unexposed | clang::TypeKind::Elaborated => {
             if typ.get_display_name().starts_with("Local<") {
-                let ref_type = try!(build_type(&get_first_tpl_arg(typ)));
+                let ref_type = r#try!(build_type(&get_first_tpl_arg(typ)));
                 Ok(Type::Ref(Box::new(ref_type)))
             } else {
                 match typ.get_display_name().as_str() {
@@ -471,38 +488,42 @@ fn build_type(typ: &clang::Type) -> Result<Type, ()> {
                     "v8::Local<v8::String>" => {
                         Ok(Type::Ref(Box::new(Type::Class("String".to_owned()))))
                     }
-                    "v8::Local<v8::FunctionTemplate>" => {
-                        Ok(Type::Ref(Box::new(Type::Class("FunctionTemplate".to_owned()))))
-                    }
+                    "v8::Local<v8::FunctionTemplate>" => Ok(Type::Ref(Box::new(Type::Class(
+                        "FunctionTemplate".to_owned(),
+                    )))),
                     n => {
-                        warn!("Unmapped type {:?} of kind {:?} (in unexposed exception table)",
-                              n,
-                              typ.get_kind());
+                        warn!(
+                            "Unmapped type {:?} of kind {:?} (in unexposed exception table)",
+                            n,
+                            typ.get_kind()
+                        );
                         Err(())
                     }
                 }
             }
         }
-        clang::TypeKind::LValueReference => {
-            match typ.get_display_name().as_str() {
-                "const v8::NamedPropertyHandlerConfiguration &" => {
-                    Ok(Type::CallbackLValue("NamedPropertyHandlerConfiguration".to_owned()))
-                }
-                "const v8::IndexedPropertyHandlerConfiguration &" => {
-                    Ok(Type::CallbackLValue("IndexedPropertyHandlerConfiguration".to_owned()))
-                }
-                n => {
-                    warn!("Unmapped type {:?} of kind {:?} (in lvalue reference exception table)",
-                          n,
-                          typ.get_kind());
-                    Err(())
-                }
+        clang::TypeKind::LValueReference => match typ.get_display_name().as_str() {
+            "const v8::NamedPropertyHandlerConfiguration &" => Ok(Type::CallbackLValue(
+                "NamedPropertyHandlerConfiguration".to_owned(),
+            )),
+            "const v8::IndexedPropertyHandlerConfiguration &" => Ok(Type::CallbackLValue(
+                "IndexedPropertyHandlerConfiguration".to_owned(),
+            )),
+            n => {
+                warn!(
+                    "Unmapped type {:?} of kind {:?} (in lvalue reference exception table)",
+                    n,
+                    typ.get_kind()
+                );
+                Err(())
             }
-        }
+        },
         _ => {
-            warn!("Unmapped type {:?} of kind {:?} (in kind dispatch table)",
-                  typ.get_display_name(),
-                  typ.get_kind());
+            warn!(
+                "Unmapped type {:?} of kind {:?} (in kind dispatch table)",
+                typ.get_display_name(),
+                typ.get_kind()
+            );
             Err(())
         }
     }
@@ -516,7 +537,7 @@ fn get_first_tpl_arg<'a>(typ: &clang::Type<'a>) -> clang::Type<'a> {
 impl fmt::Display for Api {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for class in self.classes.iter() {
-            try!(writeln!(f, "{}", class));
+            r#try!(writeln!(f, "{}", class));
         }
         Ok(())
     }
@@ -524,9 +545,9 @@ impl fmt::Display for Api {
 
 impl fmt::Display for Class {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, "class {}", self.name));
+        r#try!(writeln!(f, "class {}", self.name));
         for method in self.methods.iter() {
-            try!(writeln!(f, "  {}", method));
+            r#try!(writeln!(f, "  {}", method));
         }
         Ok(())
     }
@@ -535,22 +556,22 @@ impl fmt::Display for Class {
 impl fmt::Display for Method {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.is_static {
-            try!(write!(f, "static "));
+            r#try!(write!(f, "static "));
         }
-        try!(write!(f, "{}(", self.name));
+        r#try!(write!(f, "{}(", self.name));
 
         let mut needs_sep = false;
         for arg in self.args.iter() {
             if needs_sep {
-                try!(write!(f, ", "));
+                r#try!(write!(f, ", "));
             }
             needs_sep = true;
-            try!(write!(f, "{}", arg));
+            r#try!(write!(f, "{}", arg));
         }
-        try!(write!(f, ") -> {}", self.ret_type));
+        r#try!(write!(f, ") -> {}", self.ret_type));
 
         if self.mangled_name != self.name {
-            try!(write!(f, " {{{}}}", self.mangled_name));
+            r#try!(write!(f, " {{{}}}", self.mangled_name));
         }
 
         Ok(())

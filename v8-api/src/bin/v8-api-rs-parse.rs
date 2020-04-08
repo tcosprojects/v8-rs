@@ -5,7 +5,7 @@ use std::env;
 use std::path;
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let header_file_path = if let Some(path) = env::args_os().nth(1) {
         path::PathBuf::from(path)
