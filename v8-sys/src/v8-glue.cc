@@ -832,6 +832,10 @@ void v8_Isolate_SetCaptureStackTraceForUncaughtExceptions_Detailed(IsolatePtr se
     self->SetCaptureStackTraceForUncaughtExceptions(capture, frame_limit, v8::StackTrace::kDetailed);
 }
 
+bool v8_Isolate_IdleNotificationDeadline(IsolatePtr self, double deadline_in_seconds) {
+    return self->IdleNotificationDeadline(deadline_in_seconds);
+}
+
 void v8_Isolate_Dispose(IsolatePtr isolate) {
     isolate->Dispose();
 }

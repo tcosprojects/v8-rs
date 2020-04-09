@@ -186,6 +186,10 @@ impl Isolate {
         unsafe { self.get_data() }.idle_task_queue.is_some()
     }
 
+    pub fn idle_notification_deadline(&self, deadline_in_seconds: f64) -> bool {
+        unsafe { v8::v8_Isolate_IdleNotificationDeadline(self.0, deadline_in_seconds) }
+    }
+
     unsafe fn get_data_ptr(&self) -> *mut Data {
         v8::v8_Isolate_GetData(self.0, DATA_PTR_SLOT) as *mut Data
     }
