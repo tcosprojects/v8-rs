@@ -59,15 +59,17 @@ impl Signature {
 
 impl FunctionTemplate {
     /// Creates a function template.
-    pub fn new(
+    pub fn new<F>(
         isolate: &isolate::Isolate,
         context: &context::Context,
-        callback: Box<value::FunctionCallback>,
-    ) -> FunctionTemplate {
+        callback: F,
+    ) -> FunctionTemplate 
+        where F: Fn(value::FunctionCallbackInfo) -> Result<value::Value, value::Value> + 'static 
+        {
         let raw = unsafe {
             let callback_ptr = Box::into_raw(Box::new(callback));
             let callback_ext =
-                value::External::new::<Box<value::FunctionCallback>>(&isolate, callback_ptr);
+                value::External::new::<F>(&isolate, callback_ptr);
 
             let template = ObjectTemplate::new(isolate);
             template.set_internal_field_count(1);
@@ -79,7 +81,7 @@ impl FunctionTemplate {
                 v8::v8_FunctionTemplate_New(
                     c,
                     context.as_raw(),
-                    Some(util::callback),
+                    Some(util::callback::<F>),
                     value::Value::as_raw(&*closure),
                     ptr::null_mut(),
                     0,

@@ -85,7 +85,9 @@ where
     }
 }
 
-pub extern "C" fn callback(callback_info: v8::FunctionCallbackInfoPtr_Value) {
+pub extern "C" fn callback<F>(callback_info: v8::FunctionCallbackInfoPtr_Value) 
+    where F: Fn(value::FunctionCallbackInfo) -> Result<value::Value, value::Value> + 'static 
+    {
     unsafe {
         let callback_info = callback_info.as_mut().unwrap();
         let isolate = isolate::Isolate::from_raw(callback_info.GetIsolate);
@@ -107,7 +109,7 @@ pub extern "C" fn callback(callback_info: v8::FunctionCallbackInfoPtr_Value) {
 
         let result = panic::catch_unwind(|| {
             let callback_ext = data.get_internal_field(0).into_external().unwrap();
-            let callback_ptr: *mut Box<value::FunctionCallback> = callback_ext.value();
+            let callback_ptr: *mut F = callback_ext.value();
             let callback = callback_ptr.as_ref().unwrap();
             callback(info)
         });
